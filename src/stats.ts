@@ -1,51 +1,61 @@
-type Description = Map<string, Set<string> | Description>;
+import * as fs from "fs";
+
+type Description = { count: number; children: null | Map<string, Description> };
+const maskNumberData = true;
 
 export class Stats {
-  private data = new Map<
-    string | undefined,
-    { count: number; description: Description }
-  >();
+  private data = new Map<string | undefined, Description>();
 
   visit(name: string | undefined, item: unknown) {
     let stat = this.data.get(name);
     if (!stat) {
       stat = {
         count: 0,
-        description: new Map<string, Set<string> | Description>(),
+        children: null,
       };
       this.data.set(name, stat);
     }
-    stat.count++;
+    const visited = new Set<Description>();
+    visited.add(stat);
     for (let [path, value] of describe(item)) {
-      let desc: Set<string> | Description = stat.description;
+      let desc = stat;
+      path = [...path, value];
       while (path.length) {
         let pathFragment = path.shift()!;
-        if (desc instanceof Set) {
-          throw new Error("Unexpected set in description tree");
+        if (desc.children === null) {
+          desc.children = new Map<string, Description>();
         }
-        let next = desc.get(pathFragment);
+        let next = desc.children.get(pathFragment);
         if (!next) {
-          next = path.length
-            ? new Map<string, Set<string> | Description>()
-            : new Set<string>();
-          desc.set(pathFragment, next);
+          next = {
+            count: 0,
+            children: null,
+          };
+          desc.children.set(pathFragment, next);
         }
         desc = next;
+        visited.add(desc);
       }
-      if (desc instanceof Map) {
-        throw new Error("Unexpected map in description tree");
-      }
-      desc.add(value);
     }
+    visited.forEach((d) => d.count++);
   }
 
-  print(name: string) {
-    print(this.data, name);
+  exportMapToFile(fileName: string) {
+    const file = fs.createWriteStream(`output/${fileName}-stats.txt`);
+    for (let [name, desc] of this.data) {
+      file.write(`${name}: ${desc.count}\n`);
+      write(desc, file);
+    }
+    file.close();
   }
 }
 
 function describe(obj: unknown, path: string[] = []): [string[], string][] {
-  if (typeof obj === "number") return [[path, "<number>"]];
+  if (
+    typeof obj === "number" ||
+    (maskNumberData && typeof obj === "string" && !isNaN(+obj))
+  )
+    return [[path, "<number>"]];
   if (typeof obj === "string") return [[path, obj]];
   if (obj === null) return [[path, "<null>"]];
   if (obj === undefined) return [];
@@ -62,26 +72,13 @@ function describe(obj: unknown, path: string[] = []): [string[], string][] {
   }
 }
 
-function print(
-  stats: Map<string | undefined, { count: number; description: Description }>,
-  name: string
-) {
-  const stat = stats.get(name)!;
-  console.log(name, stat.count);
-  print2(stat.description);
-}
-
-function print2(p: Set<string> | Description, indent: number = 0) {
+function write(p: Description, file: fs.WriteStream, indent: number = 0) {
+  if (p.children === null) return;
   let indentS = " ".repeat(++indent);
-  if (p instanceof Set) {
-    console.log(indentS, `(${p.size})`, [...p.values()].slice(0, 5).join(","));
-  } else {
-    const entries = [...p.entries()];
-    for (let [key, value] of entries.slice(0, 5)) {
-      console.log(indentS, key);
-      print2(value, indent);
-    }
-    if (entries.length > 5)
-      console.log(indentS, `... ${entries.length - 5} more`);
+  for (let [key, value] of [...p.children.entries()].sort(
+    ([_a, ad], [_b, bd]) => bd.count - ad.count
+  )) {
+    file.write(`${indentS}(${value.count}) ${key.replaceAll("\n", "\\n")}\n`);
+    write(value, file, indent);
   }
 }

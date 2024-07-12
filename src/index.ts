@@ -6,7 +6,7 @@ import { Data } from "./collect.js";
 import { exportMapToFile } from "./map.js";
 
 const inputName = "kralovehradecky-latest";
-const doDump = true;
+const doDump = false;
 const doStats = true;
 const doMap = false;
 
@@ -31,9 +31,7 @@ async function doIt() {
   console.log("Loaded in", loadedTime - startTime, "ms");
 
   if (stats) {
-    stats.print("node");
-    stats.print("way");
-    stats.print("relation");
+    stats.exportMapToFile(inputName);
   }
   if (doMap) {
     exportMapToFile(collector, () => true, inputName);
