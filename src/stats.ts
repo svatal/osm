@@ -41,11 +41,15 @@ export class Stats {
   }
 
   exportMapToFile(fileName: string) {
-    const file = fs.createWriteStream(`output/${fileName}-stats.txt`);
+    const file = fs.createWriteStream(`output/${fileName}-stats.xml`);
+    file.write(`<?xml version="1.0" encoding="UTF-8"?>\n`);
+    file.write(`<stats>\n`);
     for (let [name, desc] of this.data) {
-      file.write(`${name}: ${desc.count}\n`);
+      file.write(`<${name} count="${desc.count}">\n`);
       write(desc, file);
+      file.write(`</${name}>\n`);
     }
+    file.write(`</stats>\n`);
     file.close();
   }
 }
@@ -78,7 +82,23 @@ function write(p: Description, file: fs.WriteStream, indent: number = 0) {
   for (let [key, value] of [...p.children.entries()].sort(
     ([_a, ad], [_b, bd]) => bd.count - ad.count
   )) {
-    file.write(`${indentS}(${value.count}) ${key.replaceAll("\n", "\\n")}\n`);
-    write(value, file, indent);
+    const sanitizedKey = key
+      .replaceAll("\n", "\\n")
+      .replaceAll("&", "&amp;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll("'", "&apos;");
+    if (value.children === null) {
+      file.write(
+        `${indentS}<e name="${sanitizedKey}" count="${value.count}"/>\n`
+      );
+    } else {
+      file.write(
+        `${indentS}<e name="${sanitizedKey}" count="${value.count}">\n`
+      );
+      write(value, file, indent);
+      file.write(`${indentS}</e>\n`);
+    }
   }
 }
