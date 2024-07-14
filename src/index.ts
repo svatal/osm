@@ -7,8 +7,8 @@ import { exportMapToFile } from "./map.js";
 
 const inputName = "kralovehradecky-latest";
 const doDump = false;
-const doStats = true;
-const doMap = false;
+const doStats = false;
+const doMap = true;
 
 doIt();
 
@@ -37,5 +37,5 @@ async function doIt() {
     exportMapToFile(collector, () => true, inputName);
   }
 
-  console.log("Done in", Date.now() - loadedTime, "ms");
+  console.log("Done in", Date.now() - loadedTime, "ms, at", new Date());
 }
