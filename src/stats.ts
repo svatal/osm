@@ -34,6 +34,7 @@ export function exportStatsToFile(input: Data, fileName: string) {
 }
 
 class Ctx {
+  isClosedWay = new Set<number>();
   relationUsedInRelations = new Set<number>();
   wayUsedInRelations = new Set<number>();
   nodeUsedInRelations = new Set<number>();
@@ -41,10 +42,9 @@ class Ctx {
   nodeUsedInOpenedWays = new Set<number>();
   data = new Map<string | undefined, Description>();
   constructor(input: Data) {
-    const isClosedWay = new Set<number>();
     input.ways.forEach((way) => {
       if (way.refs.length > 1 && way.refs[0] === way.refs[way.refs.length - 1])
-        isClosedWay.add(way.id);
+        this.isClosedWay.add(way.id);
     });
     input.relations.forEach((relation) => {
       relation.members.forEach((member) => {
@@ -63,7 +63,7 @@ class Ctx {
     });
     input.ways.forEach((way) => {
       way.refs.forEach((ref) => {
-        if (isClosedWay.has(way.id)) this.nodeUsedInClosedWays.add(ref);
+        if (this.isClosedWay.has(way.id)) this.nodeUsedInClosedWays.add(ref);
         else this.nodeUsedInOpenedWays.add(ref);
       });
     });
@@ -101,13 +101,15 @@ function visit(name: string | undefined, item: OSMItem, ctx: Ctx) {
     (item.type === "node" && ctx.nodeUsedInRelations.has(item.id));
   const isInClosedWay =
     item.type === "node" && ctx.nodeUsedInClosedWays.has(item.id);
+  const isClosedWay = item.type === "way" && ctx.isClosedWay.has(item.id);
   const isInOpenWay =
     item.type === "node" && ctx.nodeUsedInOpenedWays.has(item.id);
+  const isOpenWay = item.type === "way" && !ctx.isClosedWay.has(item.id);
   visited.forEach((d) => {
     d.count++;
     if (isInRelation) d.inRelationCount++;
-    if (isInClosedWay) d.inClosedWayCount++;
-    if (isInOpenWay) d.inOpenWayCount++;
+    if (isInClosedWay || isClosedWay) d.inClosedWayCount++;
+    if (isInOpenWay || isOpenWay) d.inOpenWayCount++;
     if (!isInRelation && !isInClosedWay && !isInOpenWay) d.standaloneCount++;
   });
 }
