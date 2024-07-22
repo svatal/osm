@@ -18,6 +18,10 @@ export interface OSMWay {
   tags: { [key: string]: string };
 }
 
+export function isOpen(way: OSMWay): boolean {
+  return way.refs.length < 2 || way.refs[0] !== way.refs[way.refs.length - 1];
+}
+
 export interface OSMRelation {
   type: "relation";
   id: number;

@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import type { Data } from "./collect.js";
-import type { OSMNode, OSMWay } from "./osmTypes.js";
+import { isOpen, type OSMNode, type OSMWay } from "./osmTypes.js";
 
 type Range = { min: number; max: number };
 const includeUnknownLines = false;
@@ -56,9 +56,15 @@ export function exportMapToFile(
         way.tags?.["landuse"] === "farmyard"
           ? "field"
           : undefined,
-        way.tags?.["waterway"] || way.tags?.["water"] ? "river" : undefined,
+        way.tags?.["waterway"] ||
+        way.tags?.["water"] ||
+        way.tags?.["natural"] === "water" ||
+        way.tags?.["leisure"] === "swimming_pool"
+          ? "water"
+          : undefined,
         way.tags?.["highway"] ? "highway" : undefined,
         way.tags?.["railway"] ? "railway" : undefined,
+        isOpen(way) ? "o" : undefined,
       ].filter((cls) => cls !== undefined);
       return cls.length
         ? `<path class="${cls.join(" ")}" d="${d}"/>`
@@ -77,9 +83,10 @@ export function exportMapToFile(
     .building { fill: sandybrown; stroke: brown; }
     .forest { fill: darkgreen; stroke: darkgreen; }
     .field { fill: beige; stroke: beige; }
-    .river { stroke: lightskyblue; }
-    .highway { stroke: green; }
-    .railway { stroke: black; stroke-dasharray: 0.001, 0.001;}
+    .water { fill: lightskyblue; stroke: lightskyblue; }
+    .highway { fill: green; stroke: green; }
+    .railway { stroke: black; stroke-dasharray: 0.001, 0.001; }
+    path.o { fill: none; }
     </style>` +
     `<g transform="translate(0, ${
       latRange!.min + latRange!.max

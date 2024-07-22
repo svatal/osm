@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import type { Data } from "./collect.js";
-import type { OSMItem } from "./osmTypes.js";
+import { isOpen, type OSMItem } from "./osmTypes.js";
 
 const maskNumberData = true;
 
@@ -43,8 +43,7 @@ class Ctx {
   data = new Map<string | undefined, Description>();
   constructor(input: Data) {
     input.ways.forEach((way) => {
-      if (way.refs.length > 1 && way.refs[0] === way.refs[way.refs.length - 1])
-        this.isClosedWay.add(way.id);
+      if (!isOpen(way)) this.isClosedWay.add(way.id);
     });
     input.relations.forEach((relation) => {
       relation.members.forEach((member) => {
