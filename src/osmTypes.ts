@@ -8,14 +8,14 @@ export interface OSMNode {
   id: number;
   lat: number;
   lon: number;
-  tags: { [key: string]: string };
+  tags?: { [key: string]: string };
 }
 
 export interface OSMWay {
   type: "way";
   id: number;
   refs: number[];
-  tags: { [key: string]: string };
+  tags?: { [key: string]: string };
 }
 
 export function isOpen(way: OSMWay): boolean {
