@@ -3,6 +3,7 @@ import type { Data } from "./collect.js";
 import { rangeTracker } from "./mapHelpers.js";
 import { closeMap, openMap, transformMapCoordinates } from "./svgHelpers.js";
 import { isOpen } from "./osmTypes.js";
+import uniqolor from "uniqolor";
 
 export function exportAttributeMapsToFiles(data: Data, fileName: string) {
   const nodes = rangeTracker(data.nodes);
@@ -47,14 +48,14 @@ export function exportAttributeMapsToFiles(data: Data, fileName: string) {
       `output/attrMaps/${fileName}-${tagName.replaceAll(":", "_")}.svg`
     );
     stream.write(openMap(ranges));
-    stream.write(
-      "<style>path { stroke-width: 0.0001; }\npath.o { fill: none; }"
-    );
+    stream.write("<style>");
     [...entry.values].forEach(([value, idx]) => {
-      const color = "#000";
+      const color = uniqolor(value).color;
       stream.write(`\npath.v${idx} { fill: ${color}; stroke: ${color}; }`);
     });
-    stream.write("\n</style>");
+    stream.write(
+      "\npath { stroke-width: 0.0001; }\npath.o { fill: none; }\n</style>"
+    );
     stream.write(`<g ${transformMapCoordinates(ranges)}>`);
     entry.ways.forEach(({ path, isOpen, valueIdx }) => {
       stream.write(
