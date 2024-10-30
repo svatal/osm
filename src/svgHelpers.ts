@@ -1,4 +1,4 @@
-import type { Ranges } from "./mapHelpers.js";
+import type { Ranges } from "./rangeTracker.js";
 
 export function openMap({ lat, lon }: Ranges) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${lon.min} ${

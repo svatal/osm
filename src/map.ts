@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import type { Data } from "./collect.js";
 import { isOpen, type OSMWay } from "./osmTypes.js";
-import { rangeTracker } from "./mapHelpers.js";
+import { rangeTracker } from "./rangeTracker.js";
 import { closeMap, openMap, transformMapCoordinates } from "./svgHelpers.js";
 
 const includeUnknownLines = false;
