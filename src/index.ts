@@ -4,13 +4,17 @@ import { exportStatsToFile } from "./stats.js";
 import * as fs from "fs";
 import { Data } from "./collect.js";
 import { exportMapToFile } from "./map.js";
-import { exportAttributeMapsToFiles } from "./attributeMaps.js";
+import {
+  exportRelationAttributeMapsToFiles,
+  exportWayAttributeMapsToFiles,
+} from "./attributeMaps.js";
 
 const inputName = "kralovehradecky-latest";
 const doDump = false;
 const doStats = false;
 const doMap = false;
-const doAttributeMaps = true;
+const doWayAttributeMaps = false;
+const doRelationAttributeMaps = true;
 
 doIt();
 
@@ -36,8 +40,11 @@ async function doIt() {
   if (doMap) {
     exportMapToFile(collector, () => true, inputName);
   }
-  if (doAttributeMaps) {
-    exportAttributeMapsToFiles(collector, inputName);
+  if (doWayAttributeMaps) {
+    exportWayAttributeMapsToFiles(collector, inputName);
+  }
+  if (doRelationAttributeMaps) {
+    exportRelationAttributeMapsToFiles(collector, inputName);
   }
 
   console.log("Done in", Date.now() - loadedTime, "ms, at", new Date());

@@ -2,10 +2,11 @@ import { createWriteStream, mkdirSync } from "fs";
 import type { Data } from "./collect.js";
 import { rangeTracker, type Ranges } from "./rangeTracker.js";
 import { closeMap, openMap, transformMapCoordinates } from "./svgHelpers.js";
-import { isOpen, type OSMNode, type OSMWay } from "./osmTypes.js";
+import { isOpen, type OSMNode } from "./osmTypes.js";
 import uniqolor from "uniqolor";
+import { getRelationWays, mergeWays } from "./relationHelper.js";
 
-export function exportAttributeMapsToFiles(data: Data, fileName: string) {
+export function exportWayAttributeMapsToFiles(data: Data, fileName: string) {
   const nodes = rangeTracker(data.nodes);
   const ways = data.ways;
 
@@ -24,20 +25,54 @@ export function exportAttributeMapsToFiles(data: Data, fileName: string) {
 
   writeToFiles(
     tags,
-    "output/attrMaps",
+    "output/attrMaps_ways",
     fileName,
     ranges,
-    (stream, entry, valueIdx) =>
+    (stream, entry) =>
       stream.write(
-        `<path class="v${valueIdx}${entry.isOpen ? " o" : ""}" d="${
-          entry.path
-        }" />`
+        `<path ${entry.isOpen ? `class="o" ` : ""}d="${entry.path}" />`
+      )
+  );
+}
+
+export function exportRelationAttributeMapsToFiles(
+  data: Data,
+  fileName: string
+) {
+  const nodes = rangeTracker(data.nodes);
+  const relations = data.relations;
+
+  const tags = createTagMap<{ path: string; isOpen: boolean }[]>();
+  relations.forEach((rel) => {
+    if (!rel.tags) return;
+    const ways = getRelationWays(rel, data.relations, data.ways);
+    const merged = mergeWays(ways);
+    createTagValues(
+      tags,
+      rel.tags,
+      merged.map((way) => ({ path: getPath(way, nodes), isOpen: isOpen(way) }))
+    );
+  });
+
+  const ranges = nodes.getRanges();
+  if (!ranges) return;
+
+  writeToFiles(
+    tags,
+    "output/attrMaps_relations",
+    fileName,
+    ranges,
+    (stream, entries) =>
+      entries.forEach((entry) =>
+        stream.write(
+          `<path ${entry.isOpen ? `class="o" ` : ""}d="${entry.path}" />`
+        )
       )
   );
 }
 
 function getPath(
-  way: OSMWay,
+  way: { refs: number[] },
   nodes: { getNode: (id: number) => OSMNode | null }
 ) {
   return `M${way.refs
@@ -95,7 +130,7 @@ function writeToFiles<TPayload>(
   outDir: string,
   fileName: string,
   ranges: Ranges,
-  writeWayEntry: (stream: any, wayEntry: TPayload, valueIdx: number) => void
+  writeWayEntry: (stream: any, wayEntry: TPayload) => void
 ) {
   mkdirSync(outDir, { recursive: true });
   tags.forEach((entry, tagName) => {
@@ -106,15 +141,24 @@ function writeToFiles<TPayload>(
     stream.write("<style>");
     [...entry.values].forEach(([value, idx]) => {
       const color = uniqolor(value).color;
-      stream.write(`\npath.v${idx} { fill: ${color}; stroke: ${color}; }`);
+      stream.write(
+        `\n.v${idx} path { fill: ${color}; stroke: ${color}; <!-- ${value} --> }`
+      );
     });
+    const reverseValues = new Map([...entry.values].map(([k, v]) => [v, k]));
     stream.write(
-      "\npath { stroke-width: 0.0001; }\npath.o { fill: none; }\n</style>"
+      "\npath { stroke-width: 0.0001; fill-opacity: 0.4; }\npath.o { fill: none; }\n</style>"
     );
     stream.write(`<g ${transformMapCoordinates(ranges)}>`);
-    entry.ways.forEach((wayEntry) =>
-      writeWayEntry(stream, wayEntry.payload, wayEntry.valueIdx)
-    );
+    entry.ways.forEach((wayEntry) => {
+      stream.write(
+        `<g class="v${wayEntry.valueIdx}"> <!-- ${reverseValues.get(
+          wayEntry.valueIdx
+        )} -->`
+      );
+      writeWayEntry(stream, wayEntry.payload);
+      stream.write("</g>");
+    });
 
     stream.write("</g>");
     stream.write(closeMap());
