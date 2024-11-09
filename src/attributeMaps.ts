@@ -47,6 +47,7 @@ export function exportRelationAttributeMapsToFiles(
     if (!rel.tags) return;
     const ways = getRelationWays(rel, data.relations, data.ways);
     const merged = mergeWays(ways);
+    if (merged.length === 0 || merged.every((m) => m.refs.length === 0)) return;
     createTagValues(
       tags,
       rel.tags,
@@ -82,27 +83,12 @@ function getPath(
     .join("L")}`;
 }
 
-interface WayEntry<TPayload> {
-  payload: TPayload;
-  valueIdx: number;
-}
-
-type TagMap<TPayload> = Map<
-  string,
-  {
-    values: Map<string, number>;
-    ways: WayEntry<TPayload>[];
-  }
->;
+type TagDict = { [key: string]: string };
+type TagValueEntry<TPayload> = { payload: TPayload; allTags: TagDict };
+type TagMap<TPayload> = Map<string, Map<string, TagValueEntry<TPayload>[]>>;
 
 function createTagMap<TPayload>(): TagMap<TPayload> {
-  return new Map<
-    string,
-    {
-      values: Map<string, number>;
-      ways: { payload: TPayload; isOpen: boolean; valueIdx: number }[];
-    }
-  >();
+  return new Map<string, Map<string, TagValueEntry<TPayload>[]>>();
 }
 
 function createTagValues<TPayload>(
@@ -112,16 +98,16 @@ function createTagValues<TPayload>(
 ) {
   Object.keys(tags).forEach((tagName) => {
     const value = tags![tagName]!;
-    var entry = tagMap.get(tagName);
-    if (!entry) {
-      entry = { values: new Map<string, number>(), ways: [] };
-      tagMap.set(tagName, entry);
+    var tagEntry = tagMap.get(tagName);
+    if (!tagEntry) {
+      tagEntry = new Map<string, TagValueEntry<TPayload>[]>();
+      tagMap.set(tagName, tagEntry);
     }
-    if (!entry.values.has(value)) {
-      entry.values.set(value, entry.values.size);
+    if (!tagEntry.has(value)) {
+      tagEntry.set(value, []);
     }
-    const idx = entry.values.get(value)!;
-    entry.ways.push({ payload, valueIdx: idx });
+    const valueEntry = tagEntry.get(value)!;
+    valueEntry.push({ payload, allTags: tags });
   });
 }
 
@@ -139,24 +125,32 @@ function writeToFiles<TPayload>(
     );
     stream.write(openMap(ranges));
     stream.write("<style>");
-    [...entry.values].forEach(([value, idx]) => {
+    const values = [...entry.keys()];
+    values.forEach((value, idx) => {
       const color = uniqolor(value).color;
       stream.write(
         `\n.v${idx} path { fill: ${color}; stroke: ${color}; <!-- ${value} --> }`
       );
     });
-    const reverseValues = new Map([...entry.values].map(([k, v]) => [v, k]));
+    // const reverseValues = new Map([...entry.values].map(([k, v]) => [v, k]));
     stream.write(
       "\npath { stroke-width: 0.0001; fill-opacity: 0.4; }\npath.o { fill: none; }\n</style>"
     );
     stream.write(`<g ${transformMapCoordinates(ranges)}>`);
-    entry.ways.forEach((wayEntry) => {
-      stream.write(
-        `<g class="v${wayEntry.valueIdx}"> <!-- ${reverseValues.get(
-          wayEntry.valueIdx
-        )} -->`
-      );
-      writeWayEntry(stream, wayEntry.payload);
+    values.forEach((value, idx) => {
+      const valueEntries = entry.get(value)!;
+      stream.write(`<g class="v${idx}"> <!-- ${value} -->`);
+      valueEntries.forEach((entry) => {
+        stream.write(`<g> <!--\n`);
+        Object.keys(entry.allTags).forEach((tagName) =>
+          stream.write(
+            `${tagName}: ${safeInComment(entry.allTags[tagName]!)}\n`
+          )
+        );
+        stream.write("-->");
+        writeWayEntry(stream, entry.payload);
+        stream.write("</g>");
+      });
       stream.write("</g>");
     });
 
@@ -164,4 +158,8 @@ function writeToFiles<TPayload>(
     stream.write(closeMap());
     stream.close();
   });
+}
+
+function safeInComment(s: string) {
+  return s.replaceAll("--", "- -");
 }
