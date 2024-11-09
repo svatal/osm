@@ -13,7 +13,7 @@ export function exportMapToFile(
 ) {
   const nodes = rangeTracker(data.nodes);
   const ways = data.ways;
-  const relations = data.relations;
+  // const relations = data.relations;
 
   const paths = [...ways.values()]
     .filter(waysFilter)
@@ -24,7 +24,7 @@ export function exportMapToFile(
       const d = `M${wayNodes
         .map((node) => `${node.lon} ${node.lat}`)
         .join("L")}`;
-      let cls = [
+      const cls = [
         way.tags?.["building"] ? "building" : undefined,
         way.tags?.["landuse"] === "meadow" ||
         way.tags?.["landuse"] === "forest" ||

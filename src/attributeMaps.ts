@@ -1,12 +1,16 @@
-import { createWriteStream, mkdirSync } from "fs";
+import { mkdirSync } from "fs";
 import type { Data } from "./collect.js";
 import { rangeTracker, type Ranges } from "./rangeTracker.js";
 import { closeMap, openMap, transformMapCoordinates } from "./svgHelpers.js";
 import { isOpen, type OSMNode } from "./osmTypes.js";
 import uniqolor from "uniqolor";
 import { getRelationWays, mergeWays } from "./relationHelper.js";
+import { createWriteStream, type IAsyncStream } from "./asyncStream.js";
 
-export function exportWayAttributeMapsToFiles(data: Data, fileName: string) {
+export async function exportWayAttributeMapsToFiles(
+  data: Data,
+  fileName: string
+) {
   const nodes = rangeTracker(data.nodes);
   const ways = data.ways;
 
@@ -23,7 +27,7 @@ export function exportWayAttributeMapsToFiles(data: Data, fileName: string) {
   const ranges = nodes.getRanges();
   if (!ranges) return;
 
-  writeToFiles(
+  await writeToFiles(
     tags,
     "output/attrMaps_ways",
     fileName,
@@ -35,7 +39,7 @@ export function exportWayAttributeMapsToFiles(data: Data, fileName: string) {
   );
 }
 
-export function exportRelationAttributeMapsToFiles(
+export async function exportRelationAttributeMapsToFiles(
   data: Data,
   fileName: string
 ) {
@@ -44,7 +48,6 @@ export function exportRelationAttributeMapsToFiles(
 
   const tags = createTagMap<{ path: string; isOpen: boolean }[]>();
   relations.forEach((rel) => {
-    if (!rel.tags) return;
     const ways = getRelationWays(rel, data.relations, data.ways);
     const merged = mergeWays(ways);
     if (merged.length === 0 || merged.every((m) => m.refs.length === 0)) return;
@@ -58,17 +61,18 @@ export function exportRelationAttributeMapsToFiles(
   const ranges = nodes.getRanges();
   if (!ranges) return;
 
-  writeToFiles(
+  await writeToFiles(
     tags,
     "output/attrMaps_relations",
     fileName,
     ranges,
-    (stream, entries) =>
-      entries.forEach((entry) =>
-        stream.write(
+    async (stream, entries) => {
+      for (const entry of entries) {
+        await stream.write(
           `<path ${entry.isOpen ? `class="o" ` : ""}d="${entry.path}" />`
-        )
-      )
+        );
+      }
+    }
   );
 }
 
@@ -97,8 +101,8 @@ function createTagValues<TPayload>(
   payload: TPayload
 ) {
   Object.keys(tags).forEach((tagName) => {
-    const value = tags![tagName]!;
-    var tagEntry = tagMap.get(tagName);
+    const value = tags[tagName]!;
+    let tagEntry = tagMap.get(tagName);
     if (!tagEntry) {
       tagEntry = new Map<string, TagValueEntry<TPayload>[]>();
       tagMap.set(tagName, tagEntry);
@@ -111,53 +115,52 @@ function createTagValues<TPayload>(
   });
 }
 
-function writeToFiles<TPayload>(
+async function writeToFiles<TPayload>(
   tags: TagMap<TPayload>,
   outDir: string,
   fileName: string,
   ranges: Ranges,
-  writeWayEntry: (stream: any, wayEntry: TPayload) => void
+  writeWayEntry: (stream: IAsyncStream, wayEntry: TPayload) => Promise<void>
 ) {
   mkdirSync(outDir, { recursive: true });
-  tags.forEach((entry, tagName) => {
+  for (const [tagName, entry] of tags) {
     const stream = createWriteStream(
       `${outDir}/${fileName}-${tagName.replaceAll(":", "_")}.svg`
     );
-    stream.write(openMap(ranges));
-    stream.write("<style>");
+    await stream.write(openMap(ranges));
+    await stream.write("<style>");
     const values = [...entry.keys()];
-    values.forEach((value, idx) => {
+    for (const [idx, value] of values.entries()) {
       const color = uniqolor(value).color;
-      stream.write(
+      await stream.write(
         `\n.v${idx} path { fill: ${color}; stroke: ${color}; <!-- ${value} --> }`
       );
-    });
-    // const reverseValues = new Map([...entry.values].map(([k, v]) => [v, k]));
-    stream.write(
+    }
+    await stream.write(
       "\npath { stroke-width: 0.0001; fill-opacity: 0.4; }\npath.o { fill: none; }\n</style>"
     );
-    stream.write(`<g ${transformMapCoordinates(ranges)}>`);
-    values.forEach((value, idx) => {
+    await stream.write(`<g ${transformMapCoordinates(ranges)}>`);
+    for (const [idx, value] of values.entries()) {
       const valueEntries = entry.get(value)!;
-      stream.write(`<g class="v${idx}"> <!-- ${value} -->`);
-      valueEntries.forEach((entry) => {
-        stream.write(`<g> <!--\n`);
-        Object.keys(entry.allTags).forEach((tagName) =>
-          stream.write(
+      await stream.write(`<g class="v${idx}"> <!-- ${value} -->`);
+      for (const entry of valueEntries) {
+        await stream.write(`<g> <!--\n`);
+        for (const tagName in entry.allTags) {
+          await stream.write(
             `${tagName}: ${safeInComment(entry.allTags[tagName]!)}\n`
-          )
-        );
-        stream.write("-->");
-        writeWayEntry(stream, entry.payload);
-        stream.write("</g>");
-      });
-      stream.write("</g>");
-    });
+          );
+        }
+        await stream.write("-->");
+        await writeWayEntry(stream, entry.payload);
+        await stream.write("</g>");
+      }
+      await stream.write("</g>");
+    }
 
-    stream.write("</g>");
-    stream.write(closeMap());
-    stream.close();
-  });
+    await stream.write("</g>");
+    await stream.write(closeMap());
+    await stream.close();
+  }
 }
 
 function safeInComment(s: string) {

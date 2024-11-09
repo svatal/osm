@@ -20,13 +20,14 @@ export function getRelationWays(
     switch (member.type) {
       case "node":
         return;
-      case "way":
+      case "way": {
         const way = ways.get(member.ref);
         if (!way) return;
 
         relationWays.push(way);
         break;
-      case "relation":
+      }
+      case "relation": {
         const childRelation = relations.get(member.ref);
         if (!childRelation) return;
 
@@ -40,6 +41,7 @@ export function getRelationWays(
           ...getRelationWays(childRelation, relations, ways, visitedRelations)
         );
         return;
+      }
       default:
         console.log("relation with unknown member type:", member, relation);
         return;

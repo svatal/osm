@@ -16,7 +16,7 @@ const doMap = false;
 const doWayAttributeMaps = false;
 const doRelationAttributeMaps = true;
 
-doIt();
+void doIt();
 
 async function doIt() {
   const startTime = Date.now();
@@ -24,7 +24,7 @@ async function doIt() {
     ? fs.createWriteStream(`output/${inputName}-dump.txt`)
     : null;
   const collector = new Data();
-  for await (let it of createOSMStream(`input/${inputName}.osm.pbf`)) {
+  for await (const it of createOSMStream(`input/${inputName}.osm.pbf`)) {
     const item = it as OSMItem;
     dump?.write(JSON.stringify(item) + "\n");
     collector.visit(item);
@@ -41,10 +41,10 @@ async function doIt() {
     exportMapToFile(collector, () => true, inputName);
   }
   if (doWayAttributeMaps) {
-    exportWayAttributeMapsToFiles(collector, inputName);
+    await exportWayAttributeMapsToFiles(collector, inputName);
   }
   if (doRelationAttributeMaps) {
-    exportRelationAttributeMapsToFiles(collector, inputName);
+    await exportRelationAttributeMapsToFiles(collector, inputName);
   }
 
   console.log("Done in", Date.now() - loadedTime, "ms, at", new Date());
