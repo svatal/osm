@@ -1,10 +1,17 @@
 import type { Counts, ParseWorkerResponse } from "./counts";
+import { clearTable, renderTable } from "./tableView";
 
 let parseWorker: Worker | null = null;
 
 function getCountsEl(): HTMLParagraphElement {
   const el = document.querySelector<HTMLParagraphElement>("#counts");
   if (!el) throw new Error("#counts not found");
+  return el;
+}
+
+function getTableEl(): HTMLElement {
+  const el = document.querySelector<HTMLElement>("#table");
+  if (!el) throw new Error("#table not found");
   return el;
 }
 
@@ -21,18 +28,21 @@ function setCounts(counts: Counts, state: "loading" | "loaded" = "loaded"): void
 
 function setLoading(): void {
   setCounts({ nodes: 0, ways: 0, relations: 0 }, "loading");
+  clearTable(getTableEl());
 }
 
 function setError(message: string): void {
   const el = getCountsEl();
   el.textContent = `Error: ${message}`;
   el.dataset.state = "error";
+  clearTable(getTableEl());
 }
 
 function setEmpty(): void {
   const el = getCountsEl();
   el.textContent = "Select a .osm.pbf file to see counts.";
   el.dataset.state = "empty";
+  clearTable(getTableEl());
 }
 
 function stopParseWorker(): void {
@@ -56,8 +66,9 @@ function parsePbfInWorker(file: File): void {
     if (msg.type === "progress") {
       setCounts(msg.counts, "loading");
     } else if (msg.type === "done") {
+      // Keep the worker alive: it holds the full parsed dataset for filtering.
       setCounts(msg.counts, "loaded");
-      stopParseWorker();
+      renderTable(getTableEl(), msg.preview);
     } else if (msg.type === "error") {
       setError(msg.message);
       stopParseWorker();
@@ -93,6 +104,7 @@ export function renderApp(root: HTMLDivElement): void {
         <input type="file" id="file" accept=".osm.pbf,.pbf" />
       </label>
       <p id="counts" data-state="empty">Select a .osm.pbf file to see counts.</p>
+      <div id="table"></div>
     </div>
   `;
 
