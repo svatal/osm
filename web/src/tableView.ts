@@ -19,8 +19,8 @@ function formatMembers(relation: OsmRelation): string {
 const TAG_VALUE_MAX = 50;
 
 function shouldShowTag(key: string): boolean {
-  if (key === "name:cs") return true;
-  if (key.startsWith("name:")) return false;
+  if (key.includes("name:cs")) return true;
+  if (key.includes("name:")) return false;
   return true;
 }
 
