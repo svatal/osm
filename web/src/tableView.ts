@@ -1,42 +1,5 @@
-import type { OsmRelation, OsmTags } from "@osmix/shared/types";
 import type { RelationPreviewRow } from "./counts";
-
-const TRUNCATE_AT = 80;
-
-function truncate(text: string): string {
-  if (text.length <= TRUNCATE_AT) return text;
-  return `${text.slice(0, TRUNCATE_AT - 1)}…`;
-}
-
-function formatMembers(relation: OsmRelation): string {
-  return truncate(
-    relation.members
-      .map((m) => `${m.type}/${m.ref}${m.role ? `:${m.role}` : ""}`)
-      .join(", ")
-  );
-}
-
-const TAG_VALUE_MAX = 50;
-
-function shouldShowTag(key: string): boolean {
-  if (key.includes("name:cs")) return true;
-  if (key.includes("name:")) return false;
-  return true;
-}
-
-function shortenTagValue(value: string | number): string {
-  const text = String(value);
-  if (text.length <= TAG_VALUE_MAX) return text;
-  return `${text.slice(0, TAG_VALUE_MAX - 1)}…`;
-}
-
-function formatTags(tags: OsmTags | undefined): string {
-  if (!tags) return "";
-  return Object.entries(tags)
-    .filter(([key]) => shouldShowTag(key))
-    .map(([key, value]) => `${key}=${shortenTagValue(value)}`)
-    .join("; ");
-}
+import { formatTags } from "./tags";
 
 function escapeHtml(value: string): string {
   return value
@@ -52,35 +15,48 @@ function cell(value: string | number | undefined, wrap = false): string {
   return wrap ? `<td class="cell-wrap">${escaped}</td>` : `<td>${escaped}</td>`;
 }
 
+/** Toggle selected row highlight without re-rendering the table. */
+export function updateTableSelection(
+  container: HTMLElement,
+  selectedRelationId: number | null
+): void {
+  container.querySelectorAll<HTMLTableRowElement>("tr[data-relation-id]").forEach((row) => {
+    const id = Number(row.dataset.relationId);
+    row.classList.toggle("row-selected", id === selectedRelationId);
+  });
+}
+
 /**
  * Renders a table of relations with transitive way/node reference counts
- * and a single tags column (all present key=value pairs).
+ * and a single tags column. Rows are clickable to open the detail panel.
  */
 export function renderTable(
   container: HTMLElement,
-  rows: RelationPreviewRow[]
+  rows: RelationPreviewRow[],
+  selectedRelationId: number | null
 ): void {
   if (rows.length === 0) {
     container.innerHTML = `<p class="table-empty">No relations to show.</p>`;
     return;
   }
 
-  const head = ["id", "ways", "nodes", "members", "tags"];
+  const head = ["id", "ways", "nodes", "tags"];
   const headerHtml = head.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
   const rowsHtml = rows
     .map(({ relation, wayCount, nodeCount }) => {
-      return `<tr>${[
+      const selected =
+        selectedRelationId === relation.id ? ' class="row-selected"' : "";
+      return `<tr data-relation-id="${relation.id}"${selected}>${[
         cell(relation.id),
         cell(wayCount),
         cell(nodeCount),
-        cell(formatMembers(relation)),
         cell(formatTags(relation.tags), true),
       ].join("")}</tr>`;
     })
     .join("");
 
   container.innerHTML = `
-    <div class="table-meta">Showing first ${rows.length.toLocaleString()} relations (ways/nodes = transitive referenced counts; full dataset kept in memory for filtering)</div>
+    <div class="table-meta">Showing first ${rows.length.toLocaleString()} relations — click a row for details (ways/nodes = transitive counts)</div>
     <div class="table-scroll">
       <table class="preview-table">
         <thead><tr>${headerHtml}</tr></thead>
@@ -88,6 +64,8 @@ export function renderTable(
       </table>
     </div>
   `;
+
+  updateTableSelection(container, selectedRelationId);
 }
 
 export function clearTable(container: HTMLElement): void {
