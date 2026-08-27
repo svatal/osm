@@ -9,11 +9,13 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
     "typescript": "~5.9.3",
     "vite": "^7.3.1"
   },
   "dependencies": {
     "@osmix/json": "^0.0.14",
-    "@osmix/pbf": "^0.0.9"
+    "@osmix/pbf": "^0.0.9",
+    "preact": "^10.29.8"
   }
 }
