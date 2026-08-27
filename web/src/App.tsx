@@ -11,12 +11,14 @@ import { entityRefKey } from "./entityRef";
 import { RelationTable } from "./RelationTable";
 
 type CountsState = "empty" | "loading" | "loaded" | "error";
+type TabId = "load" | "relations";
 
 function formatCounts(counts: Counts): string {
   return `Nodes: ${counts.nodes.toLocaleString()}  ·  Ways: ${counts.ways.toLocaleString()}  ·  Relations: ${counts.relations.toLocaleString()}`;
 }
 
 export function App() {
+  const [activeTab, setActiveTab] = useState<TabId>("load");
   const [counts, setCounts] = useState<Counts>({
     nodes: 0,
     ways: 0,
@@ -35,6 +37,8 @@ export function App() {
   const pendingDetailRef = useRef<string | null>(null);
   const previewRowsRef = useRef(previewRows);
   previewRowsRef.current = previewRows;
+
+  const relationsReady = countsState === "loaded";
 
   const stopWorker = useCallback(() => {
     if (workerRef.current) {
@@ -111,6 +115,7 @@ export function App() {
   const parseFile = useCallback(
     (file: File) => {
       stopWorker();
+      setActiveTab("load");
       setCounts({ nodes: 0, ways: 0, relations: 0 });
       setCountsState("loading");
       setCountsMessage(formatCounts({ nodes: 0, ways: 0, relations: 0 }));
@@ -134,6 +139,7 @@ export function App() {
           setCountsMessage(formatCounts(msg.counts));
           setPreviewRows(msg.preview);
           resetNavigation();
+          setActiveTab("relations");
         } else if (msg.type === "entityDetail") {
           const key = entityRefKey(msg.detail.ref);
           detailCacheRef.current.set(key, msg.detail);
@@ -146,6 +152,7 @@ export function App() {
           setCountsMessage(`Error: ${msg.message}`);
           setPreviewRows([]);
           resetNavigation();
+          setActiveTab("load");
           stopWorker();
         }
       };
@@ -155,6 +162,7 @@ export function App() {
         setCountsMessage("Error: Worker failed");
         setPreviewRows([]);
         resetNavigation();
+        setActiveTab("load");
         stopWorker();
       };
 
@@ -172,6 +180,7 @@ export function App() {
       setCountsMessage("Select a .osm.pbf file to see counts.");
       setPreviewRows([]);
       resetNavigation();
+      setActiveTab("load");
       return;
     }
     parseFile(file);
@@ -179,7 +188,8 @@ export function App() {
 
   const selectedRelationId =
     navStack[0]?.type === "relation" ? navStack[0].id : null;
-  const detailOpen = navStack.length > 0 && detail !== null;
+  const detailOpen =
+    activeTab === "relations" && navStack.length > 0 && detail !== null;
 
   const countsLabel =
     countsState === "loading"
@@ -188,52 +198,102 @@ export function App() {
 
   return (
     <div class="app">
-      <header class="app-header">
-        <h1>OSM Explorer</h1>
-        <p class="hint">
-          Load a .osm.pbf file (e.g. from{" "}
-          <a
-            href="https://download.openstreetmap.fr/extracts/"
-            target="_blank"
-            rel="noopener"
-          >
-            download.openstreetmap.fr
-          </a>
-          )
-        </p>
-        <label class="file-label">
-          <span>Select file</span>
-          <input type="file" accept=".osm.pbf,.pbf" onChange={onFileSelected} />
-        </label>
-        <p id="counts" data-state={countsState}>
-          {countsLabel}
-        </p>
-      </header>
-      <div
-        class={
-          detailOpen ? "workspace workspace-detail-open" : "workspace"
-        }
-      >
-        <div id="table" class="workspace-main">
-          {previewRows.length > 0 || countsState === "loaded" ? (
-            <RelationTable
-              rows={previewRows}
-              selectedRelationId={selectedRelationId}
-              onRelationSelect={(id) =>
-                navigateTo({ type: "relation", id })
-              }
-            />
-          ) : null}
-        </div>
-        {detailOpen ? (
-          <DetailPanel
-            stack={navStack}
-            detail={detail}
-            onBreadcrumbClick={navigateToBreadcrumb}
-            onMemberClick={drillInto}
-          />
-        ) : null}
+      <div class="tabs" role="tablist" aria-label="Main">
+        <button
+          type="button"
+          role="tab"
+          id="tab-load"
+          class={activeTab === "load" ? "tab tab-active" : "tab"}
+          aria-selected={activeTab === "load"}
+          aria-controls="panel-load"
+          onClick={() => setActiveTab("load")}
+        >
+          Load file
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="tab-relations"
+          class={activeTab === "relations" ? "tab tab-active" : "tab"}
+          aria-selected={activeTab === "relations"}
+          aria-controls="panel-relations"
+          disabled={!relationsReady}
+          title={
+            relationsReady
+              ? undefined
+              : "Available after a file finishes loading"
+          }
+          onClick={() => {
+            if (relationsReady) setActiveTab("relations");
+          }}
+        >
+          Relations
+        </button>
       </div>
+
+      {activeTab === "load" ? (
+        <section
+          id="panel-load"
+          role="tabpanel"
+          aria-labelledby="tab-load"
+          class="tab-panel tab-panel-load"
+        >
+          <h1>OSM Explorer</h1>
+          <p class="hint">
+            Load a .osm.pbf file (e.g. from{" "}
+            <a
+              href="https://download.openstreetmap.fr/extracts/"
+              target="_blank"
+              rel="noopener"
+            >
+              download.openstreetmap.fr
+            </a>
+            )
+          </p>
+          <label class="file-label">
+            <span>Select file</span>
+            <input
+              type="file"
+              accept=".osm.pbf,.pbf"
+              onChange={onFileSelected}
+            />
+          </label>
+          <p id="counts" data-state={countsState}>
+            {countsLabel}
+          </p>
+        </section>
+      ) : (
+        <section
+          id="panel-relations"
+          role="tabpanel"
+          aria-labelledby="tab-relations"
+          class="tab-panel tab-panel-relations"
+        >
+          <div
+            class={
+              detailOpen ? "workspace workspace-detail-open" : "workspace"
+            }
+          >
+            <div id="table" class="workspace-main">
+              <RelationTable
+                rows={previewRows}
+                selectedRelationId={selectedRelationId}
+                onRelationSelect={(id) =>
+                  navigateTo({ type: "relation", id })
+                }
+              />
+            </div>
+            {detailOpen ? (
+              <DetailPanel
+                stack={navStack}
+                detail={detail}
+                onBreadcrumbClick={navigateToBreadcrumb}
+                onMemberClick={drillInto}
+              />
+            ) : null}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -17,7 +17,7 @@ export function RelationTable({
   }
 
   return (
-    <>
+    <div class="relation-table">
       <div class="table-meta">
         Showing first {rows.length.toLocaleString()} relations — click a row for
         details (ways/nodes = transitive counts)
@@ -50,6 +50,6 @@ export function RelationTable({
           </tbody>
         </table>
       </div>
-    </>
+    </div>
   );
 }
